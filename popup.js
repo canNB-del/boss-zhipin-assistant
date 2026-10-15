@@ -4,6 +4,65 @@ const saveJobs = jobs => chrome.storage.local.set({jobs});
 const defaultTemplate = $('template').value;
 const profileFields = ['profileName', 'profileEducation', 'profileExperience', 'profileSkills', 'profilePreferences'];
 const profileLabels = ['称呼', '教育背景', '工作或项目经历', '技能与优势', '求职意向与可用时间'];
+const resumeFields = ['resumeName', 'resumeEducation', 'resumeExperience', 'resumeSkills', 'resumePreferences'];
+let resumeRevision=0, resumeBusy=false, undoProfile=null;
+function resetResumePreview(){
+  resumeRevision++;
+  $('resumePreview').hidden=true;
+  $('resumeFile').value='';$('resumeText').value='';
+  for(const id of resumeFields)$(id).value='';
+}
+async function importResume(event){
+  const file=event.target.files[0];
+  resetResumePreview();
+  if(!file)return;
+  const revision=resumeRevision;
+  $('resumeStatus').textContent='正在本机解析，请保持插件窗口打开…';
+  try{
+    const result=await ResumeParser.extract(file);
+    if(revision!==resumeRevision)return;
+    profileFields.forEach((id,i)=>$(resumeFields[i]).value=result.profile[id]||'');
+    $('resumeText').value=result.text;
+    $('resumePreview').hidden=false;
+    $('resumeStatus').textContent='解析完成，请核对后再覆盖。'+result.warnings.join(' ');
+  }catch(error){
+    if(revision===resumeRevision)$('resumeStatus').textContent='解析失败，原资料保持不变：'+error.message;
+  }
+}
+function setResumeBusy(busy){
+  resumeBusy=busy;
+  for(const id of ['applyResume','undoResume','saveProfile','clearLocal','resumeFile','cancelResume'])$(id).disabled=busy;
+}
+async function applyResume(){
+  if(resumeBusy || $('resumePreview').hidden)return;
+  const next=Object.fromEntries(profileFields.map((id,i)=>[id,$(resumeFields[i]).value.trim()]));
+  if(!Object.values(next).some(Boolean)){$('resumeStatus').textContent='预览为空，请补充内容或取消导入。';return;}
+  const previous=readProfile();
+  setResumeBusy(true);
+  try{
+    await chrome.storage.local.set({profileData:next});
+    undoProfile=previous;
+    profileFields.forEach(id=>$(id).value=next[id]);
+    resetResumePreview();$('reply').value='';
+    $('undoResume').hidden=false;
+    $('profileStatus').textContent='个人资料已用简历内容覆盖并保存。';
+    $('resumeStatus').textContent='已覆盖；在本次插件窗口关闭前可以撤销。';
+  }catch(error){$('resumeStatus').textContent='保存失败，原资料保持不变：'+error.message;}
+  finally{setResumeBusy(false);}
+}
+async function undoResume(){
+  if(resumeBusy || !undoProfile)return;
+  setResumeBusy(true);
+  try{
+    await chrome.storage.local.set({profileData:undoProfile});
+    profileFields.forEach(id=>$(id).value=undoProfile[id]||'');
+    undoProfile=null;$('undoResume').hidden=true;$('reply').value='';
+    resetResumePreview();
+    $('profileStatus').textContent='已恢复简历覆盖前的个人资料。';
+    $('resumeStatus').textContent='已撤销上次简历覆盖。';
+  }catch(error){$('resumeStatus').textContent='撤销失败：'+error.message;}
+  finally{setResumeBusy(false);}
+}
 function isBossUrl(value){
   try{const url=new URL(value);return url.protocol==='https:' && url.hostname==='www.zhipin.com';}catch{return false;}
 }
@@ -20,6 +79,7 @@ async function saveProfile(){
 async function clearLocal(){
   if(!confirm('清除当前浏览器中的个人资料、岗位队列和自定义打招呼模板？'))return;
   await chrome.storage.local.remove(['profileData','jobs','template']);
+  resetResumePreview();undoProfile=null;$('undoResume').hidden=true;$('resumeStatus').textContent='';
   for(const id of profileFields)$(id).value='';
   $('template').value=defaultTemplate;
   $('hrQuestion').value='';$('reply').value='';$('apiKey').value='';
@@ -77,6 +137,7 @@ async function generate(){
     if(!r.ok)throw new Error((data?.error?.message||'HTTP '+r.status));
     const text=data?.choices?.[0]?.message?.content?.trim();
     if(!text)throw new Error('接口没有返回文本');
+    if(profile!==profileText() || question!==$('hrQuestion').value.trim())throw new Error('资料或问题已改变，请重新生成回复');
     $('reply').value=text;
   }catch(e){alert('生成失败：'+e.message);}finally{$('generate').disabled=false;$('generate').textContent='生成回复';}
 }
@@ -128,6 +189,8 @@ $('file').onchange=async e=>{
 $('addCurrent').onclick=addCurrent;$('openNext').onclick=openNext;$('fill').onclick=fill;$('template').onchange=()=>chrome.storage.local.set({template:$('template').value});
 $('readHr').onclick=readHr;$('generate').onclick=generate;$('fillReply').onclick=fillReply;
 $('saveProfile').onclick=saveProfile;$('clearLocal').onclick=clearLocal;
+$('resumeFile').onchange=importResume;$('applyResume').onclick=applyResume;$('undoResume').onclick=undoResume;
+$('cancelResume').onclick=()=>{resetResumePreview();$('resumeStatus').textContent='已取消导入，个人资料未改变。';};
 async function initialize(){
   const stored=await chrome.storage.local.get({profileData:{},profileSchemaVersion:0});
   // Replace templates inherited from the earlier personalized prototype once.
