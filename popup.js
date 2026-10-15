@@ -1,4 +1,6 @@
 const $ = id => document.getElementById(id);
+const popupVersion='0.7.1';
+const reloadAiHelp='请在 edge://extensions/ 或 chrome://extensions/ 找到 Boss 直聘应聘助手，点击“重新加载”，再重新打开插件。只刷新 BOSS 页面不会更新扩展权限；请勿卸载，以免丢失本机资料。';
 const getJobs = () => new Promise(resolve => chrome.storage.local.get({jobs:[], template:$('template').value}, x => resolve(x)));
 const saveJobs = jobs => chrome.storage.local.set({jobs});
 const defaultTemplate = $('template').value;
@@ -146,6 +148,22 @@ function showApiEndpoint(){
   try{$('apiEndpoint').textContent='实际请求地址：'+AiConnection.resolve($('baseUrl').value).endpoint;}
   catch(error){$('apiEndpoint').textContent=error.message;}
 }
+function showExtensionVersion(){
+  const installed=chrome.runtime?.getManifest?.().version;
+  $('extensionVersion').textContent='界面版本 v'+popupVersion+(installed?' · 浏览器加载 v'+installed:'');
+  if(installed && installed!==popupVersion){
+    $('connectionStatus').textContent='检测到扩展文件已更新，但浏览器仍加载旧版。'+reloadAiHelp;
+  }
+}
+async function requestAiPermission(originPattern){
+  try{return await chrome.permissions.request({origins:[originPattern]});}
+  catch(error){
+    if(/Only permissions specified in the manifest may be requested/i.test(String(error?.message||error))){
+      throw new Error('浏览器加载的扩展清单未声明该接口域名权限，请求尚未发送。'+reloadAiHelp+' 若仍报错，请确认加载的是新版解压文件夹，且其中 manifest.json 包含 optional_host_permissions。');
+    }
+    throw error;
+  }
+}
 function setAiBusy(busy){
   aiBusy=busy;
   for(const id of ['baseUrl','apiKey','model','saveAi','testAi'])$(id).disabled=busy;
@@ -173,7 +191,7 @@ async function runAi(testOnly=false){
   if(!testOnly)$('generate').textContent='生成中…';
   try{
     // Request only the selected host, directly from this button's user gesture.
-    const allowed=await chrome.permissions.request({origins:[config.originPattern]});
+    const allowed=await requestAiPermission(config.originPattern);
     if(!allowed)throw new Error('未获得该接口域名的访问授权，未发送请求。再次点击可重新授权。');
     await chrome.storage.local.set({aiConfig:{baseUrl:config.baseUrl,model:config.model}});
     const messages=testOnly?[{role:'user',content:'连接测试，请只回复 OK。'}]:[
@@ -246,6 +264,7 @@ $('resumeFile').onchange=importResume;$('undoResume').onclick=undoResume;
 $('modeResume').onchange=()=>chooseProfileMode('resume');
 $('modeManual').onchange=()=>chooseProfileMode('manual');
 async function initialize(){
+  showExtensionVersion();
   try{
     const stored=await chrome.storage.local.get({profileData:{},profileMode:null,profileSchemaVersion:0,aiConfig:null});
     // Replace templates inherited from the earlier personalized prototype once.

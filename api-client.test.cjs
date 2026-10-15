@@ -36,12 +36,12 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
   for(const [fetch,pattern] of variants){const client=transport(fetch);await assert.rejects(client.complete({endpoint:'https://relay.example/v1/chat/completions',model:'custom',key:'synthetic-secret',messages:[]}),error=>pattern.test(error.message) && !error.message.includes('synthetic-secret'));}
  });
  const html=fs.readFileSync(path.join(root,'popup.html'),'utf8');
- function boot(store={}){
+ function boot(store={},installedVersion='0.7.1'){
   const nodes={};for(const [,id] of html.matchAll(/id="([^"]+)"/g))nodes[id]={value:'',hidden:false,disabled:false,textContent:'',replaceChildren(){},appendChild(){}};
   nodes.template.value='通用模板';nodes.baseUrl.value='https://api.openai.com/v1';nodes.model.value='gpt-4o-mini';
-  const state={allowed:true,requests:[],grants:[],next:null};
+  const state={allowed:true,requests:[],grants:[],next:null,permissionError:null};
   const ctx=vm.createContext({URL,AbortController,setTimeout,clearTimeout,document:{getElementById:id=>nodes[id],createElement:()=>({})},confirm:()=>true,
-   chrome:{permissions:{async request(options){state.grants.push(options);return state.allowed;}},storage:{local:{async get(defaults,cb){const data={...defaults,...structuredClone(store)};if(cb)cb(data);return data;},async set(data){Object.assign(store,structuredClone(data));},async remove(keys){keys.forEach(key=>delete store[key]);}}}},
+   chrome:{runtime:{getManifest(){return {version:installedVersion};}},permissions:{async request(options){state.grants.push(options);if(state.permissionError)throw new Error(state.permissionError);return state.allowed;}},storage:{local:{async get(defaults,cb){const data={...defaults,...structuredClone(store)};if(cb)cb(data);return data;},async set(data){Object.assign(store,structuredClone(data));},async remove(keys){keys.forEach(key=>delete store[key]);}}}},
    fetch:async(url,options)=>{state.requests.push({url,options,body:JSON.parse(options.body)});if(state.next)return state.next();return {ok:true,status:200,json:async()=>({choices:[{message:{content:'测试回复'}}]})};}});
   vm.runInContext(source,ctx);vm.runInContext(fs.readFileSync(path.join(root,'popup.js'),'utf8'),ctx);
   return {nodes,state,store,ctx};
@@ -75,6 +75,30 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
  });
  await test('manifest uses optional host grants and only required BOSS access',()=>{
   const manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8'));assert.deepEqual(manifest.host_permissions,['https://www.zhipin.com/*']);assert(manifest.optional_host_permissions.includes('https://*/*'));assert(!manifest.permissions.includes('<all_urls>'));
+ });
+ await test('stale loaded manifest shows reload instructions, sends nothing and keeps local data',async()=>{
+  const saved={profileSchemaVersion:1,profileData:{profileSkills:'SYNTHETIC_SAVED_PROFILE'},aiConfig:{baseUrl:'https://relay.example',model:'relay-model'},jobs:[{job:'Synthetic role'}]};
+  const before=JSON.stringify(saved),old=boot(saved,'0.6.0');await ready();
+  assert(old.nodes.extensionVersion.textContent.includes('浏览器加载 v0.6.0'));
+  assert(old.nodes.connectionStatus.textContent.includes('仍加载旧版'));
+  old.state.permissionError='Only permissions specified in the manifest may be requested.';
+  old.nodes.apiKey.value='synthetic-secret';await old.nodes.testAi.onclick();
+  assert.equal(old.state.requests.length,0);assert.equal(JSON.stringify(saved),before);
+  assert(old.nodes.connectionStatus.textContent.includes('请求尚未发送'));
+  assert(old.nodes.connectionStatus.textContent.includes('重新加载'));
+  assert(old.nodes.connectionStatus.textContent.includes('请勿卸载'));
+  assert(!old.nodes.connectionStatus.textContent.includes('synthetic-secret'));
+  assert(!old.nodes.testAi.disabled);
+  const reloaded=boot(saved);await ready();reloaded.nodes.apiKey.value='synthetic-secret';await reloaded.nodes.testAi.onclick();
+  assert(reloaded.nodes.connectionStatus.textContent.includes('连接成功'));
+  assert.equal(reloaded.state.requests[0].url,'https://relay.example/v1/chat/completions');
+  assert.equal(reloaded.nodes.profileSkills.value,'SYNTHETIC_SAVED_PROFILE');
+ });
+ await test('popup and manifest versions match in the release package',()=>{
+  const manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8'));
+  const popup=fs.readFileSync(path.join(root,'popup.js'),'utf8');
+  assert(popup.includes("const popupVersion='"+manifest.version+"'"));
+  assert(html.includes('界面版本 v'+manifest.version));
  });
  console.log(passed+' API configuration checks passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});
