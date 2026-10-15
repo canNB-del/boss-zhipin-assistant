@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+node_modules/
+*.log
+*.zip
+*.csv
+*.doc
+*.docx
+*.pdf
+*.pem
+*.key
+profile*.json
+resume*.json
+jobs*.json
+local-data/

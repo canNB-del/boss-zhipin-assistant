@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>Boss 直聘应聘助手</title><style>body{font:14px Arial;width:380px;padding:12px}button{margin:4px 0;padding:7px 10px}textarea,input{width:100%;box-sizing:border-box}textarea{height:90px}input{padding:7px;margin:3px 0 7px}#list{max-height:160px;overflow:auto}.job{padding:6px;border-bottom:1px solid #ddd;cursor:pointer}.muted{color:#777;font-size:12px}.row{display:flex;gap:6px}</style></head>
+<body>
+  <h3>Boss 直聘应聘助手</h3>
+  <details open>
+    <summary>个人资料（自行填写，姓名可留空）</summary>
+    <p class="muted">所有资料默认空白。点击保存后仅保存在当前浏览器；点击生成回复时，填写的资料和当前问题会发送给 OpenAI。</p>
+    <label for="profileName">称呼（选填）</label>
+    <input id="profileName" autocomplete="off" maxlength="80" placeholder="可以不填真实姓名">
+    <label for="profileEducation">教育背景</label>
+    <textarea id="profileEducation" placeholder="自行填写学历、专业、毕业时间等"></textarea>
+    <label for="profileExperience">工作或项目经历</label>
+    <textarea id="profileExperience" placeholder="填写真实经历、个人职责和成果"></textarea>
+    <label for="profileSkills">技能与优势</label>
+    <textarea id="profileSkills" placeholder="填写熟悉的技能及熟练程度"></textarea>
+    <label for="profilePreferences">求职意向与可用时间</label>
+    <textarea id="profilePreferences" placeholder="目标岗位、城市、到岗时间、薪资预期等；未确定的内容可留空"></textarea>
+    <button id="saveProfile">保存个人资料到本机</button>
+    <button id="clearLocal">清除本机求职数据</button>
+    <p id="profileStatus" class="muted" role="status"></p>
+  </details>
+  <hr>
+  <input id="file" type="file" accept=".csv,.json"><br>
+  <button id="addCurrent">加入当前职位</button>
+  <button id="openNext">打开下一个未处理岗位</button>
+  <div id="list"></div>
+  <hr>
+  <label>OpenAI API Key（仅本次使用，不会保存）</label>
+  <input id="apiKey" type="password" autocomplete="off" placeholder="sk-...">
+  <label>模型</label>
+  <input id="model" value="gpt-4o-mini" autocomplete="off">
+  <label for="hrQuestion">问题文本（读取后请核对发送方）</label>
+  <textarea id="hrQuestion" placeholder="点击读取当前页面，或直接粘贴 HR 的问题"></textarea>
+  <div class="row"><button id="readHr">读取当前页面</button><button id="generate">生成回复</button></div>
+  <label>候选回复</label>
+  <textarea id="reply" placeholder="生成的回复会显示在这里"></textarea>
+  <button id="fillReply">填充到 BOSS 输入框</button>
+  <p class="muted">读取结果可能包含自己发出的消息，请先核对。插件只填充草稿，不覆盖输入框已有文字；最后由你点击发送。</p>
+  <hr>
+  <p class="muted">岗位消息模板</p>
+  <textarea id="template">您好，我对贵司的【{job}】很感兴趣，希望进一步了解岗位要求和工作内容，期待与您沟通，谢谢！</textarea>
+  <button id="fill">填充当前职位消息</button>
+  <script src="popup.js"></script>
+</body>
+</html>
