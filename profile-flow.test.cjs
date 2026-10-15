@@ -27,7 +27,7 @@ function boot(store={}){
  assert(app.nodes.manualPanel.hidden && !app.nodes.undoResume.hidden,'no manual step');
  app.nodes.apiKey.value='test-key';app.nodes.hrQuestion.value='能轮班吗？';await app.run('generate()');
  assert(JSON.parse(app.state.requests[0].messages[1].content).candidateProfile.includes('可接受轮班'),'generation uses imported facts');
- assert(!JSON.stringify(app.store).includes('test-key'),'key not stored');
+ assert.equal(app.store.aiCredential.key,'test-key','key retained');
  const saved=structuredClone(app.store);app=boot(app.store);await flush();
  assert(app.nodes.modeResume.checked && app.nodes.manualPanel.hidden,'upload mode survives reopen');
  assert.equal(app.nodes.profileName.value,'李明');
@@ -43,7 +43,7 @@ function boot(store={}){
  assert(app.nodes.modeManual.disabled && app.nodes.profileName.disabled && app.nodes.generate.disabled,'busy controls locked');
  await app.nodes.modeManual.onchange();assert.equal(app.store.profileMode,'resume','mode cannot change during parse');
  release();await pending;assert.equal(app.store.profileData.profileSkills,'Rust');assert(!app.nodes.generate.disabled,'controls unlocked');
- await app.nodes.clearLocal.onclick();assert(!app.store.profileData && !app.store.profileMode);assert(app.nodes.modeResume.checked);fields.forEach(id=>assert.equal(app.nodes[id].value,''));
+ await app.nodes.clearLocal.onclick();assert(!app.store.profileData && !app.store.profileMode);assert.equal(app.store.aiCredential.key,'test-key');assert.equal(app.nodes.apiKey.value,'test-key');assert(app.nodes.modeResume.checked);fields.forEach(id=>assert.equal(app.nodes[id].value,''));
  app=boot(saved);await flush();await app.nodes.undoResume.onclick();assert.deepEqual(app.store.profileData,saved.profileData,'undo unavailable after reopening');
  console.log('PASS auto upload/save, no manual step, unclassified context, reply generation, reopen/mode persistence, manual save, full replacement, undo, parse/save failures, busy state and clear');
 })().catch(error=>{console.error(error);process.exitCode=1;});

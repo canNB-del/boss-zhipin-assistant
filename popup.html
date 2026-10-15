@@ -1,9 +1,10 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><title>Boss 直聘应聘助手</title><style>body{font:14px Arial;width:380px;padding:12px}button{margin:4px 0;padding:7px 10px}textarea,input{width:100%;box-sizing:border-box}textarea{height:90px}input{padding:7px;margin:3px 0 7px}#list{max-height:160px;overflow:auto}.job{padding:6px;border-bottom:1px solid #ddd;cursor:pointer}.muted{color:#777;font-size:12px}.row{display:flex;gap:6px}fieldset{border:1px solid #ddd;border-radius:6px;padding:10px}fieldset label{display:block;margin:5px 0}input[type=radio]{width:auto;margin:0 6px 0 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}</style></head>
+<head><meta charset="utf-8"><title>Boss 直聘应聘助手</title><style>body{font:14px Arial;max-width:420px;margin:0 auto;padding:12px;box-sizing:border-box}.window-header{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:white;z-index:1;border-bottom:1px solid #ddd;gap:10px}.window-header h3{margin:12px 0}button{margin:4px 0;padding:7px 10px}textarea,input{width:100%;box-sizing:border-box}textarea{height:90px}input{padding:7px;margin:3px 0 7px}#list{max-height:160px;overflow:auto}.job{padding:6px;border-bottom:1px solid #ddd;cursor:pointer}.muted{color:#777;font-size:12px}.row{display:flex;gap:6px}fieldset{border:1px solid #ddd;border-radius:6px;padding:10px}fieldset label{display:block;margin:5px 0}input[type=radio]{width:auto;margin:0 6px 0 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}</style></head>
 <body>
-  <h3>Boss 直聘应聘助手</h3>
-  <p id="extensionVersion" class="muted">界面版本 v0.7.2</p>
+  <header class="window-header"><h3>Boss 直聘应聘助手</h3><button id="closeAssistant">关闭窗口</button></header>
+  <p class="muted">独立窗口：点击其他页面也会保持打开。使用顶部关闭按钮结束。</p>
+  <p id="extensionVersion" class="muted">界面版本 v0.7.3</p>
   <fieldset>
     <legend>个人资料来源</legend>
     <label><input id="modeResume" name="profileMode" type="radio" value="resume" checked> 上传简历自动覆盖</label>
@@ -51,8 +52,9 @@
     <input id="baseUrl" type="url" value="https://api.openai.com/v1" autocomplete="off" placeholder="https://你的服务商域名/v1">
     <p class="muted">可填写中转站或其他厂商的 API 地址，自动补全聊天接口路径；也可粘贴完整的 /chat/completions 地址。请使用 API 地址，而非网页聊天地址。</p>
     <p id="apiEndpoint" class="muted" style="overflow-wrap:anywhere" aria-live="polite"></p>
-    <label for="apiKey">API Key（该服务商的密钥，仅本次使用）</label>
-    <input id="apiKey" type="password" autocomplete="off" placeholder="输入该接口对应的密钥">
+    <label for="apiKey">API Key（保存在本机，可手动更换）</label>
+    <input id="apiKey" type="password" autocomplete="off" placeholder="输入该接口对应的密钥，自动保存">
+    <button id="clearKey">清除已保存密钥</button>
     <label for="model">模型名称（按服务商提供的模型 ID 填写）</label>
     <input id="model" value="gpt-4o-mini" autocomplete="off" placeholder="例如服务商控制台中的模型 ID">
     <button id="loadModels">获取模型列表</button>
@@ -64,10 +66,11 @@
       <p id="modelCount" class="muted" role="status" aria-live="polite"></p>
     </div>
     <p class="muted">填好地址和密钥后，点击获取模型列表。可搜索并选择，也可手动输入。获取列表不会发送简历或问题。</p>
-    <div class="row"><button id="saveAi">保存地址与模型</button><button id="testAi">测试连接</button></div>
+    <div class="row"><button id="saveAi">保存接口设置</button><button id="testAi">测试连接</button></div>
     <p id="connectionStatus" class="muted" role="status" aria-live="polite"></p>
-    <p class="muted">地址和模型保存在本机，密钥不保存。首次连接新域名时由浏览器请求授权。测试连接只发送测试文字；生成回复会把个人资料和问题发送给上面显示的服务商。</p>
+    <p class="muted">地址、模型和密钥保存在当前浏览器，密钥以密码框显示，可手动替换或清除。首次连接新域名时由浏览器请求授权。测试连接只发送测试文字；生成回复会把个人资料和问题发送给上面显示的服务商。</p>
   </section>
+  <p class="muted">先在浏览器选中要沟通的 BOSS 页面，再回到助手读取或填充。操作目标为最近选中的 BOSS 页面。</p>
   <label for="hrQuestion">问题文本（读取后请核对发送方）</label>
   <textarea id="hrQuestion" placeholder="点击读取当前页面，或直接粘贴 HR 的问题"></textarea>
   <div class="row"><button id="readHr">读取当前页面</button><button id="generate">生成回复</button></div>

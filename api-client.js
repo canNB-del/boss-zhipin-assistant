@@ -1,4 +1,4 @@
-/* OpenAI-compatible Chat Completions transport. No provider credentials are stored. */
+/* OpenAI-compatible Chat Completions transport. Credentials are supplied by the trusted extension UI. */
 (() => {
   function resolve(value) {
     const input=String(value||'').trim();

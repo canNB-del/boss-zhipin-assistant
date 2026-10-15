@@ -43,19 +43,19 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
   const nodes={};for(const [,id] of html.matchAll(/id="([^"]+)"/g))nodes[id]={value:'',hidden:false,disabled:false,textContent:'',children:[],replaceChildren(){this.children=[];},appendChild(child){this.children.push(child);}};
   nodes.modelPicker.hidden=true;
   nodes.template.value='通用模板';nodes.baseUrl.value='https://api.openai.com/v1';nodes.model.value='gpt-4o-mini';
-  const state={allowed:true,requests:[],grants:[],next:null,permissionError:null};
-  const ctx=vm.createContext({URL,AbortController,setTimeout,clearTimeout,document:{getElementById:id=>nodes[id],createElement:()=>({})},confirm:()=>true,
-   chrome:{runtime:{getManifest(){return {version:installedVersion};}},permissions:{async request(options){state.grants.push(options);if(state.permissionError)throw new Error(state.permissionError);return state.allowed;}},storage:{local:{async get(defaults,cb){const data={...defaults,...structuredClone(store)};if(cb)cb(data);return data;},async set(data){Object.assign(store,structuredClone(data));},async remove(keys){keys.forEach(key=>delete store[key]);}}}},
+  const state={allowed:true,requests:[],grants:[],next:null,permissionError:null,closed:false,failWrite:false,accessLevel:null,target:null,tabMessages:[],alerts:[]};
+  const ctx=vm.createContext({URL,AbortController,setTimeout,clearTimeout,window:{close(){state.closed=true;}},document:{getElementById:id=>nodes[id],createElement:()=>({})},confirm:()=>true,alert:message=>state.alerts.push(message),
+   chrome:{runtime:{getManifest(){return {version:installedVersion};},async sendMessage(){return {tab:state.target};}},tabs:{async sendMessage(tabId,message){state.tabMessages.push({tabId,message});return message.type==='getLatestHrMessage'?{text:'Synthetic HR question'}:{ok:true};}},permissions:{async request(options){state.grants.push(options);if(state.permissionError)throw new Error(state.permissionError);return state.allowed;}},storage:{local:{async get(defaults,cb){const data={...defaults,...structuredClone(store)};if(cb)cb(data);return data;},async setAccessLevel(options){state.accessLevel=options.accessLevel;},async set(data){if(state.failWrite)throw Error('synthetic-secret storage failure');Object.assign(store,structuredClone(data));},async remove(keys){keys.forEach(key=>delete store[key]);}}}},
    fetch:async(url,options)=>{state.requests.push({url,options,body:options.body===undefined?undefined:JSON.parse(options.body)});if(state.next)return state.next(url,options);return {ok:true,status:200,json:async()=>({choices:[{message:{content:'测试回复'}}]})};}});
   vm.runInContext(source,ctx);vm.runInContext(fs.readFileSync(path.join(root,'popup.js'),'utf8'),ctx);
   return {nodes,state,store,ctx};
  }
  const ready=()=>new Promise(resolve=>setImmediate(resolve));
  let app=boot();await ready();
- await test('save connection settings, restore on reopen, never store key',async()=>{
+ await test('save connection settings and key, restore on reopen in trusted extension context',async()=>{
   app.nodes.baseUrl.value='https://relay.example/compatible-mode/v1';app.nodes.model.value='vendor-special';app.nodes.apiKey.value='synthetic-secret';
-  await app.nodes.saveAi.onclick();assert.equal(app.store.aiConfig.model,'vendor-special');assert(!JSON.stringify(app.store).includes('synthetic-secret'));
-  app=boot(app.store);await ready();assert.equal(app.nodes.baseUrl.value,'https://relay.example/compatible-mode/v1');assert.equal(app.nodes.model.value,'vendor-special');assert.equal(app.nodes.apiKey.value,'');
+  await app.nodes.saveAi.onclick();assert.equal(app.store.aiConfig.model,'vendor-special');assert.equal(app.store.aiCredential.key,'synthetic-secret');assert.equal(app.state.accessLevel,'TRUSTED_CONTEXTS');
+  app=boot(app.store);await ready();assert.equal(app.nodes.baseUrl.value,'https://relay.example/compatible-mode/v1');assert.equal(app.nodes.model.value,'vendor-special');assert.equal(app.nodes.apiKey.value,'synthetic-secret');
  });
  await test('connection test requests only selected host and sends no profile',async()=>{
   app.nodes.profileSkills.value='PRIVATE_SYNTHETIC_PROFILE';app.nodes.hrQuestion.value='PRIVATE_SYNTHETIC_QUESTION';app.nodes.apiKey.value='synthetic-secret';
@@ -123,7 +123,7 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
   const client=transport(async()=>({ok:true,status:200,json:async()=>[{id:'bare-array-model'}]}));
   assert.deepEqual(Array.from(await client.listModels({endpoint:'https://relay.example/v1/models',key:'fake'})),['bare-array-model']);
  });
- await test('discover without a model, search, select, save and reopen without storing key or list',async()=>{
+ await test('discover without a model, search, select, save and reopen with saved key but no stored model list',async()=>{
   const picker=boot({profileSchemaVersion:1});await ready();
   picker.nodes.baseUrl.value='https://relay.example/custom/v1/chat/completions';picker.nodes.model.value='';picker.nodes.apiKey.value='synthetic-secret';
   picker.nodes.profileSkills.value='PRIVATE_PROFILE';picker.nodes.hrQuestion.value='PRIVATE_QUESTION';
@@ -136,10 +136,10 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
   assert(picker.nodes.modelList.children.some(option=>option.textContent==='<model-id>'));
   picker.nodes.modelFilter.value='VENDOR-b';picker.nodes.modelFilter.oninput();assert.equal(picker.nodes.modelList.children.length,2);assert(picker.nodes.modelCount.textContent.includes('1 / 3'));
   picker.nodes.modelList.value='Vendor-B';await picker.nodes.modelList.onchange();assert.equal(picker.nodes.model.value,'Vendor-B');assert.equal(picker.store.aiConfig.model,'Vendor-B');
-  assert(!JSON.stringify(picker.store).includes('synthetic-secret'));assert(!JSON.stringify(picker.store).includes('vendor-a'));
+  assert.equal(picker.store.aiCredential.key,'synthetic-secret');assert(!JSON.stringify(picker.store).includes('vendor-a'));
   const reopened=boot(picker.store);await ready();assert.equal(reopened.nodes.model.value,'Vendor-B');assert.equal(reopened.nodes.modelPicker.hidden,true);
   picker.nodes.modelFilter.value='no-match';picker.nodes.modelFilter.oninput();assert(picker.nodes.modelCount.textContent.includes('0 / 3'));assert.equal(picker.nodes.model.value,'Vendor-B');
-  picker.nodes.apiKey.value='different-key';picker.nodes.apiKey.oninput();assert.equal(picker.nodes.modelPicker.hidden,true);assert.equal(picker.nodes.modelList.children.length,0);
+  picker.nodes.apiKey.value='different-key';await picker.nodes.apiKey.oninput();assert.equal(picker.nodes.modelPicker.hidden,true);assert.equal(picker.nodes.modelList.children.length,0);
  });
  await test('discovery handles missing key, denial, failure and stale responses without replacing manual model or draft',async()=>{
   const picker=boot({profileSchemaVersion:1});await ready();picker.nodes.model.value='manual-id';picker.nodes.reply.value='draft';
@@ -152,6 +152,34 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
   picker.state.next=async()=>({ok:true,status:200,json:async()=>({data:[{id:'new-model'}]})});
   await picker.nodes.loadModels.onclick();assert.equal(picker.nodes.modelPicker.hidden,false);
   picker.nodes.baseUrl.oninput();assert.equal(picker.nodes.modelPicker.hidden,true);assert.equal(picker.nodes.model.value,'manual-id');
+ });
+ await test('key auto-save survives close, manual replacement, endpoint change, data cleanup and explicit removal',async()=>{
+  let keys=boot({profileSchemaVersion:1});await ready();
+  keys.nodes.baseUrl.value='https://relay.example/v1';keys.nodes.baseUrl.oninput();keys.nodes.apiKey.value='first-synthetic-key';await keys.nodes.apiKey.oninput();
+  const store=keys.store;keys=boot(store);await ready();assert.equal(keys.nodes.apiKey.value,'first-synthetic-key');
+  keys.nodes.apiKey.value='replacement-synthetic-key';await keys.nodes.apiKey.oninput();
+  await keys.nodes.closeAssistant.onclick();assert(keys.state.closed);keys=boot(store);await ready();assert.equal(keys.nodes.apiKey.value,'replacement-synthetic-key');
+  keys.nodes.baseUrl.value='https://other.example/v1';keys.nodes.baseUrl.oninput();assert.equal(keys.nodes.apiKey.value,'');
+  await keys.nodes.testAi.onclick();assert.equal(keys.state.requests.length,0);
+  keys.nodes.baseUrl.value='https://relay.example/v1/chat/completions';keys.nodes.baseUrl.oninput();assert.equal(keys.nodes.apiKey.value,'replacement-synthetic-key');
+  await keys.nodes.clearLocal.onclick();assert.equal(keys.nodes.apiKey.value,'replacement-synthetic-key');assert.equal(store.aiCredential.key,'replacement-synthetic-key');
+  await keys.nodes.clearKey.onclick();assert.equal(store.aiCredential.key,'');keys=boot(store);await ready();assert.equal(keys.nodes.apiKey.value,'');
+ });
+ await test('queued key edits preserve the last edit and storage failure redacts secrets',async()=>{
+  const keys=boot({profileSchemaVersion:1});await ready();
+  keys.nodes.apiKey.value='a';const first=keys.nodes.apiKey.oninput();keys.nodes.apiKey.value='synthetic-secret';const last=keys.nodes.apiKey.oninput();await Promise.all([first,last]);
+  assert.equal(keys.store.aiCredential.key,'synthetic-secret');keys.state.failWrite=true;await keys.nodes.apiKey.oninput();
+  assert(keys.nodes.connectionStatus.textContent.includes('保存失败'));assert(!keys.nodes.connectionStatus.textContent.includes('synthetic-secret'));
+ });
+ await test('independent assistant reads and fills the remembered BOSS tab, never its own window',async()=>{
+  const ui=boot({profileSchemaVersion:1});await ready();
+  ui.state.target={id:77,url:'https://www.zhipin.com/web/chat/index',title:'Synthetic BOSS'};
+  await ui.nodes.readHr.onclick();assert.equal(ui.nodes.hrQuestion.value,'Synthetic HR question');
+  ui.nodes.reply.value='Synthetic draft';await ui.nodes.fillReply.onclick();
+  assert.equal(ui.state.tabMessages.length,2);assert(ui.state.tabMessages.every(item=>item.tabId===77));
+  assert.equal(ui.state.tabMessages[1].message.text,'Synthetic draft');
+  await ui.nodes.addCurrent.onclick();assert.equal(ui.store.jobs[0].url,ui.state.target.url);
+  ui.state.target=null;await ui.nodes.fillReply.onclick();assert.equal(ui.state.tabMessages.length,2);assert(ui.state.alerts.at(-1).includes('BOSS'));
  });
  console.log(passed+' API configuration checks passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});
