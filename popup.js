@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const popupVersion='0.7.1';
+const popupVersion='0.7.2';
 const reloadAiHelp='请在 edge://extensions/ 或 chrome://extensions/ 找到 Boss 直聘应聘助手，点击“重新加载”，再重新打开插件。只刷新 BOSS 页面不会更新扩展权限；请勿卸载，以免丢失本机资料。';
 const getJobs = () => new Promise(resolve => chrome.storage.local.get({jobs:[], template:$('template').value}, x => resolve(x)));
 const saveJobs = jobs => chrome.storage.local.set({jobs});
@@ -7,6 +7,7 @@ const defaultTemplate = $('template').value;
 const profileFields = ['profileName', 'profileEducation', 'profileExperience', 'profileSkills', 'profilePreferences', 'profileSupplement'];
 const profileLabels = ['称呼', '教育背景', '工作或项目经历', '技能与优势', '求职意向与可用时间', '补充信息'];
 let resumeBusy=false, undoProfile=null, profileMode='resume', aiBusy=false;
+let modelIds=[];
 function updateProfileView(){
   $('modeResume').checked=profileMode==='resume';
   $('modeManual').checked=profileMode==='manual';
@@ -97,7 +98,7 @@ async function clearLocal(){
     for(const id of profileFields)$(id).value='';
     profileMode='resume';updateProfileView();
     $('template').value=defaultTemplate;
-    $('hrQuestion').value='';$('reply').value='';$('apiKey').value='';$('connectionStatus').textContent='';
+    $('hrQuestion').value='';$('reply').value='';$('apiKey').value='';$('connectionStatus').textContent='';clearModelList();
     render([]);$('profileStatus').textContent='本机求职数据已清除。';
   }catch(error){$('profileStatus').textContent='清除失败：'+error.message;}
   finally{setResumeBusy(false);}
@@ -138,10 +139,10 @@ async function readHr(){
     $('hrQuestion').value=res.text;
   }catch(error){alert('读取失败：'+error.message);}
 }
-function readAiConfig(){
+function readAiConfig(requireModel=true){
   const baseUrl=$('baseUrl').value.trim(),model=$('model').value.trim();
   const resolved=AiConnection.resolve(baseUrl);
-  if(!model)throw new Error('请填写该服务商提供的模型名称。');
+  if(requireModel && !model)throw new Error('请填写该服务商提供的模型名称，或点击“获取模型列表”后选择。');
   return {baseUrl,model,...resolved};
 }
 function showApiEndpoint(){
@@ -166,8 +167,47 @@ async function requestAiPermission(originPattern){
 }
 function setAiBusy(busy){
   aiBusy=busy;
-  for(const id of ['baseUrl','apiKey','model','saveAi','testAi'])$(id).disabled=busy;
+  for(const id of ['baseUrl','apiKey','model','saveAi','testAi','modelFilter','modelList'])$(id).disabled=busy;
+  $('loadModels').disabled=busy||resumeBusy;
   $('generate').disabled=busy||resumeBusy;$('clearLocal').disabled=busy||resumeBusy;
+}
+function clearModelList(){
+  modelIds=[];$('modelPicker').hidden=true;$('modelFilter').value='';$('modelList').replaceChildren();$('modelCount').textContent='';
+}
+function renderModelList(){
+  const query=$('modelFilter').value.trim().toLowerCase();
+  const filtered=modelIds.filter(id=>id.toLowerCase().includes(query));
+  $('modelList').replaceChildren();
+  const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=filtered.length?'请选择模型，自动填写并保存':'没有匹配的模型';
+  $('modelList').appendChild(placeholder);
+  for(const id of filtered){const option=document.createElement('option');option.value=id;option.textContent=id;$('modelList').appendChild(option);}
+  $('modelList').value=filtered.includes($('model').value.trim())?$('model').value.trim():'';
+  $('modelCount').textContent='显示 '+filtered.length+' / '+modelIds.length+' 个模型';
+}
+async function loadModels(){
+  if(resumeBusy || aiBusy)return;
+  const key=$('apiKey').value.trim();let config;
+  try{
+    config=readAiConfig(false);
+    if(!key)throw new Error('请先填写该接口对应的 API Key，再获取模型列表。');
+  }catch(error){$('connectionStatus').textContent=error.message;return;}
+  clearModelList();setAiBusy(true);$('loadModels').textContent='获取中…';
+  $('connectionStatus').textContent='正在从 '+new URL(config.modelsEndpoint).origin+' 获取模型列表…';
+  try{
+    const allowed=await requestAiPermission(config.originPattern);
+    if(!allowed)throw new Error('未获得该接口域名的访问授权，未发送请求。再次点击可重新授权。');
+    const ids=await AiConnection.listModels({endpoint:config.modelsEndpoint,key});
+    const current=readAiConfig(false);
+    if(current.modelsEndpoint!==config.modelsEndpoint || key!==$('apiKey').value.trim())throw new Error('连接设置已改变，请重新获取模型列表。');
+    modelIds=ids;$('modelPicker').hidden=false;renderModelList();
+    $('connectionStatus').textContent='已获取 '+ids.length+' 个模型，请选择后自动填写。列表不代表模型一定支持聊天，可再测试连接。';
+  }catch(error){$('connectionStatus').textContent='获取模型失败：'+AiConnection.errorMessage(error,key)+' 可手动填写模型名称。';}
+  finally{setAiBusy(false);$('loadModels').textContent='获取模型列表';}
+}
+async function selectModel(){
+  if(aiBusy || !modelIds.includes($('modelList').value))return;
+  $('model').value=$('modelList').value;$('reply').value='';
+  await saveAiConfig();
 }
 async function saveAiConfig(){
   if(aiBusy)return;
@@ -257,7 +297,10 @@ $('file').onchange=async e=>{
 };
 $('addCurrent').onclick=addCurrent;$('openNext').onclick=openNext;$('fill').onclick=fill;$('template').onchange=()=>chrome.storage.local.set({template:$('template').value});
 $('saveAi').onclick=saveAiConfig;$('testAi').onclick=()=>runAi(true);
-for(const id of ['baseUrl','model'])$(id).oninput=()=>{showApiEndpoint();$('connectionStatus').textContent='';$('reply').value='';};
+$('loadModels').onclick=loadModels;$('modelFilter').oninput=renderModelList;$('modelList').onchange=selectModel;
+$('baseUrl').oninput=()=>{clearModelList();showApiEndpoint();$('connectionStatus').textContent='';$('reply').value='';};
+$('apiKey').oninput=()=>{clearModelList();$('connectionStatus').textContent='';};
+$('model').oninput=()=>{if(modelIds.length)renderModelList();$('connectionStatus').textContent='';$('reply').value='';};
 $('readHr').onclick=readHr;$('generate').onclick=generate;$('fillReply').onclick=fillReply;
 $('saveProfile').onclick=saveProfile;$('clearLocal').onclick=clearLocal;
 $('resumeFile').onchange=importResume;$('undoResume').onclick=undoResume;

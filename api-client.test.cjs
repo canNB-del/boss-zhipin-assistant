@@ -10,7 +10,10 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
    ['https://relay.example/v1/','https://relay.example/v1/chat/completions'],
    ['https://vendor.example/compatible-mode/v1','https://vendor.example/compatible-mode/v1/chat/completions'],
    ['https://vendor.example/api/chat/completions/','https://vendor.example/api/chat/completions'],
-   ['http://127.0.0.1:9000/v1','http://127.0.0.1:9000/v1/chat/completions']])assert.equal(api.resolve(value).endpoint,expected);
+   ['http://127.0.0.1:9000/v1','http://127.0.0.1:9000/v1/chat/completions']]){
+    assert.equal(api.resolve(value).endpoint,expected);
+    assert.equal(api.resolve(value).modelsEndpoint,expected.replace(/\/chat\/completions$/,'/models'));
+   }
   assert.equal(api.resolve('https://relay.example:8443/v1').originPattern,'https://relay.example/*');
  });
  await test('reject credentials, query secrets, unsafe schemes and unsupported native APIs',()=>{
@@ -36,13 +39,14 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
   for(const [fetch,pattern] of variants){const client=transport(fetch);await assert.rejects(client.complete({endpoint:'https://relay.example/v1/chat/completions',model:'custom',key:'synthetic-secret',messages:[]}),error=>pattern.test(error.message) && !error.message.includes('synthetic-secret'));}
  });
  const html=fs.readFileSync(path.join(root,'popup.html'),'utf8');
- function boot(store={},installedVersion='0.7.1'){
-  const nodes={};for(const [,id] of html.matchAll(/id="([^"]+)"/g))nodes[id]={value:'',hidden:false,disabled:false,textContent:'',replaceChildren(){},appendChild(){}};
+ function boot(store={},installedVersion=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')).version){
+  const nodes={};for(const [,id] of html.matchAll(/id="([^"]+)"/g))nodes[id]={value:'',hidden:false,disabled:false,textContent:'',children:[],replaceChildren(){this.children=[];},appendChild(child){this.children.push(child);}};
+  nodes.modelPicker.hidden=true;
   nodes.template.value='通用模板';nodes.baseUrl.value='https://api.openai.com/v1';nodes.model.value='gpt-4o-mini';
   const state={allowed:true,requests:[],grants:[],next:null,permissionError:null};
   const ctx=vm.createContext({URL,AbortController,setTimeout,clearTimeout,document:{getElementById:id=>nodes[id],createElement:()=>({})},confirm:()=>true,
    chrome:{runtime:{getManifest(){return {version:installedVersion};}},permissions:{async request(options){state.grants.push(options);if(state.permissionError)throw new Error(state.permissionError);return state.allowed;}},storage:{local:{async get(defaults,cb){const data={...defaults,...structuredClone(store)};if(cb)cb(data);return data;},async set(data){Object.assign(store,structuredClone(data));},async remove(keys){keys.forEach(key=>delete store[key]);}}}},
-   fetch:async(url,options)=>{state.requests.push({url,options,body:JSON.parse(options.body)});if(state.next)return state.next();return {ok:true,status:200,json:async()=>({choices:[{message:{content:'测试回复'}}]})};}});
+   fetch:async(url,options)=>{state.requests.push({url,options,body:options.body===undefined?undefined:JSON.parse(options.body)});if(state.next)return state.next(url,options);return {ok:true,status:200,json:async()=>({choices:[{message:{content:'测试回复'}}]})};}});
   vm.runInContext(source,ctx);vm.runInContext(fs.readFileSync(path.join(root,'popup.js'),'utf8'),ctx);
   return {nodes,state,store,ctx};
  }
@@ -99,6 +103,55 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
   const popup=fs.readFileSync(path.join(root,'popup.js'),'utf8');
   assert(popup.includes("const popupVersion='"+manifest.version+"'"));
   assert(html.includes('界面版本 v'+manifest.version));
+ });
+ await test('model discovery uses authenticated GET without a body; sorts and deduplicates exact model IDs',async()=>{
+  let seen;const client=transport(async(url,options)=>{seen={url,options};return {ok:true,status:200,json:async()=>({data:[{id:'z/model:1'},{id:'a-chat'},{id:'z/model:1'},{id:''},{name:'ignore'},{id:99},null]})};});
+  const ids=await client.listModels({endpoint:'https://relay.example/custom/v1/models',key:'synthetic-key'});
+  assert.deepEqual(Array.from(ids),['a-chat','z/model:1']);assert.equal(seen.url,'https://relay.example/custom/v1/models');
+  assert.equal(seen.options.method,'GET');assert.equal(seen.options.headers.Authorization,'Bearer synthetic-key');assert.equal(seen.options.body,undefined);assert.equal(seen.options.headers['Content-Type'],undefined);
+  assert.equal(seen.options.redirect,'error');assert.equal(seen.options.credentials,'omit');
+ });
+ await test('model list failures provide manual fallback, preserve HTTP status and redact key',async()=>{
+  const variants=[
+   [{ok:true,status:200,json:async()=>({data:[]})},/未返回可用模型/],
+   [{ok:true,status:200,json:async()=>({models:['unsupported']})},/GET \/models/],
+   [{ok:false,status:401,json:async()=>({error:{message:'invalid synthetic-secret'}})},/HTTP 401/],
+   [{ok:false,status:404,json:async()=>({error:{message:'not found'}})},/HTTP 404/],
+   [{ok:true,status:200,json:async()=>{throw Error('HTML');}},/JSON/]
+  ];
+  for(const [response,pattern] of variants){const client=transport(async()=>response);await assert.rejects(client.listModels({endpoint:'https://relay.example/v1/models',key:'synthetic-secret'}),error=>pattern.test(error.message) && !error.message.includes('synthetic-secret'));}
+  const client=transport(async()=>({ok:true,status:200,json:async()=>[{id:'bare-array-model'}]}));
+  assert.deepEqual(Array.from(await client.listModels({endpoint:'https://relay.example/v1/models',key:'fake'})),['bare-array-model']);
+ });
+ await test('discover without a model, search, select, save and reopen without storing key or list',async()=>{
+  const picker=boot({profileSchemaVersion:1});await ready();
+  picker.nodes.baseUrl.value='https://relay.example/custom/v1/chat/completions';picker.nodes.model.value='';picker.nodes.apiKey.value='synthetic-secret';
+  picker.nodes.profileSkills.value='PRIVATE_PROFILE';picker.nodes.hrQuestion.value='PRIVATE_QUESTION';
+  picker.state.next=async()=>({ok:true,status:200,json:async()=>({data:[{id:'vendor-a'},{id:'Vendor-B'},{id:'<model-id>'}]})});
+  await picker.nodes.loadModels.onclick();
+  assert.equal(picker.state.requests.length,1);const request=picker.state.requests[0];
+  assert.equal(request.url,'https://relay.example/custom/v1/models');assert.equal(request.options.method,'GET');assert.equal(request.body,undefined);
+  assert.equal(picker.state.grants[0].origins[0],'https://relay.example/*');assert(!JSON.stringify(request).includes('PRIVATE_'));
+  assert.equal(picker.nodes.model.value,'');assert.equal(picker.nodes.modelPicker.hidden,false);assert.equal(picker.nodes.modelList.children.length,4);
+  assert(picker.nodes.modelList.children.some(option=>option.textContent==='<model-id>'));
+  picker.nodes.modelFilter.value='VENDOR-b';picker.nodes.modelFilter.oninput();assert.equal(picker.nodes.modelList.children.length,2);assert(picker.nodes.modelCount.textContent.includes('1 / 3'));
+  picker.nodes.modelList.value='Vendor-B';await picker.nodes.modelList.onchange();assert.equal(picker.nodes.model.value,'Vendor-B');assert.equal(picker.store.aiConfig.model,'Vendor-B');
+  assert(!JSON.stringify(picker.store).includes('synthetic-secret'));assert(!JSON.stringify(picker.store).includes('vendor-a'));
+  const reopened=boot(picker.store);await ready();assert.equal(reopened.nodes.model.value,'Vendor-B');assert.equal(reopened.nodes.modelPicker.hidden,true);
+  picker.nodes.modelFilter.value='no-match';picker.nodes.modelFilter.oninput();assert(picker.nodes.modelCount.textContent.includes('0 / 3'));assert.equal(picker.nodes.model.value,'Vendor-B');
+  picker.nodes.apiKey.value='different-key';picker.nodes.apiKey.oninput();assert.equal(picker.nodes.modelPicker.hidden,true);assert.equal(picker.nodes.modelList.children.length,0);
+ });
+ await test('discovery handles missing key, denial, failure and stale responses without replacing manual model or draft',async()=>{
+  const picker=boot({profileSchemaVersion:1});await ready();picker.nodes.model.value='manual-id';picker.nodes.reply.value='draft';
+  await picker.nodes.loadModels.onclick();assert.equal(picker.state.requests.length,0);assert(picker.nodes.connectionStatus.textContent.includes('API Key'));
+  picker.nodes.apiKey.value='synthetic-secret';picker.state.allowed=false;await picker.nodes.loadModels.onclick();assert.equal(picker.state.requests.length,0);
+  picker.state.allowed=true;picker.state.next=async()=>({ok:false,status:404,json:async()=>({error:{message:'unsupported'}})});
+  await picker.nodes.loadModels.onclick();assert(picker.nodes.connectionStatus.textContent.includes('手动填写'));assert.equal(picker.nodes.model.value,'manual-id');assert.equal(picker.nodes.reply.value,'draft');assert(!picker.nodes.loadModels.disabled);
+  picker.state.next=async()=>{picker.nodes.baseUrl.value='https://other.example/v1';return {ok:true,status:200,json:async()=>({data:[{id:'stale-model'}]})};};
+  await picker.nodes.loadModels.onclick();assert.equal(picker.nodes.modelPicker.hidden,true);assert(picker.nodes.connectionStatus.textContent.includes('设置已改变'));
+  picker.state.next=async()=>({ok:true,status:200,json:async()=>({data:[{id:'new-model'}]})});
+  await picker.nodes.loadModels.onclick();assert.equal(picker.nodes.modelPicker.hidden,false);
+  picker.nodes.baseUrl.oninput();assert.equal(picker.nodes.modelPicker.hidden,true);assert.equal(picker.nodes.model.value,'manual-id');
  });
  console.log(passed+' API configuration checks passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});
