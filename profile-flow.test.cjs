@@ -4,11 +4,13 @@ const fields=['profileName','profileEducation','profileExperience','profileSkill
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function boot(store={}){
  const nodes={};for(const [,id] of html.matchAll(/id="([^"]+)"/g))nodes[id]={value:'',hidden:false,disabled:false,checked:false,textContent:'',replaceChildren(){},appendChild(){}};
+ nodes.baseUrl.value='https://api.openai.com/v1';
  nodes.template.value=html.match(/<textarea id="template">([^<]*)<\/textarea>/)[1];nodes.model.value='test-model';
  const state={fail:false,requests:[]};
- const ctx=vm.createContext({TextDecoder,Uint8Array,DataView,document:{getElementById:id=>nodes[id],createElement:()=>({})},
-  chrome:{storage:{local:{async get(defaults,cb){const result={...structuredClone(defaults),...structuredClone(store)};if(cb)cb(result);return result;},async set(data){if(state.fail && data.profileData)throw Error('test storage failure');Object.assign(store,structuredClone(data));},async remove(keys){keys.forEach(key=>delete store[key]);}}}},
+ const ctx=vm.createContext({URL,AbortController,setTimeout,clearTimeout,TextDecoder,Uint8Array,DataView,document:{getElementById:id=>nodes[id],createElement:()=>({})},
+  chrome:{permissions:{async request(){return true;}},storage:{local:{async get(defaults,cb){const result={...structuredClone(defaults),...structuredClone(store)};if(cb)cb(result);return result;},async set(data){if(state.fail && data.profileData)throw Error('test storage failure');Object.assign(store,structuredClone(data));},async remove(keys){keys.forEach(key=>delete store[key]);}}}},
   confirm:()=>true,alert:message=>{throw Error(message);},fetch:async(url,options)=>{state.requests.push(JSON.parse(options.body));return {ok:true,json:async()=>({choices:[{message:{content:'草稿'}}]})};}});
+ vm.runInContext(fs.readFileSync(path.join(root,'api-client.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(root,'resume-parser.js'),'utf8'),ctx);vm.runInContext(fs.readFileSync(path.join(root,'popup.js'),'utf8'),ctx);
  const run=code=>vm.runInContext(code,ctx),upload=async(text,name='example.txt',wait)=>{
   const bytes=Buffer.from(text);await nodes.resumeFile.onchange({target:{files:[{name,size:bytes.length,arrayBuffer:async()=>{if(wait)await wait;return Uint8Array.from(bytes).buffer;}}]}});

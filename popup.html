@@ -37,17 +37,27 @@
   <button id="undoResume" hidden>撤销上次简历覆盖</button>
   <button id="clearLocal">清除本机求职数据</button>
   <p id="profileStatus" class="muted" role="status" aria-live="polite"></p>
-  <p class="muted">资料仅保存在当前浏览器。生成回复时，会将当前资料和问题发送给 OpenAI。导入不会修改 BOSS 在线简历或发送附件。</p>
+  <p class="muted">资料仅保存在当前浏览器。生成回复时，会将当前资料和问题发送到你配置的 AI 服务。导入不会修改 BOSS 在线简历或发送附件。</p>
   <hr>
   <input id="file" type="file" accept=".csv,.json"><br>
   <button id="addCurrent">加入当前职位</button>
   <button id="openNext">打开下一个未处理岗位</button>
   <div id="list"></div>
   <hr>
-  <label>OpenAI API Key（仅本次使用，不会保存）</label>
-  <input id="apiKey" type="password" autocomplete="off" placeholder="sk-...">
-  <label>模型</label>
-  <input id="model" value="gpt-4o-mini" autocomplete="off">
+  <section id="aiSettings">
+    <h4>AI 服务设置（OpenAI 兼容接口）</h4>
+    <label for="baseUrl">接口地址 / Base URL</label>
+    <input id="baseUrl" type="url" value="https://api.openai.com/v1" autocomplete="off" placeholder="https://你的服务商域名/v1">
+    <p class="muted">可填写中转站或其他厂商的 API 地址，自动补全聊天接口路径；也可粘贴完整的 /chat/completions 地址。请使用 API 地址，而非网页聊天地址。</p>
+    <p id="apiEndpoint" class="muted" style="overflow-wrap:anywhere" aria-live="polite"></p>
+    <label for="apiKey">API Key（该服务商的密钥，仅本次使用）</label>
+    <input id="apiKey" type="password" autocomplete="off" placeholder="输入该接口对应的密钥">
+    <label for="model">模型名称（按服务商提供的模型 ID 填写）</label>
+    <input id="model" value="gpt-4o-mini" autocomplete="off" placeholder="例如服务商控制台中的模型 ID">
+    <div class="row"><button id="saveAi">保存地址与模型</button><button id="testAi">测试连接</button></div>
+    <p id="connectionStatus" class="muted" role="status" aria-live="polite"></p>
+    <p class="muted">地址和模型保存在本机，密钥不保存。首次连接新域名时由浏览器请求授权。测试连接只发送测试文字；生成回复会把个人资料和问题发送给上面显示的服务商。</p>
+  </section>
   <label for="hrQuestion">问题文本（读取后请核对发送方）</label>
   <textarea id="hrQuestion" placeholder="点击读取当前页面，或直接粘贴 HR 的问题"></textarea>
   <div class="row"><button id="readHr">读取当前页面</button><button id="generate">生成回复</button></div>
@@ -60,6 +70,7 @@
   <textarea id="template">您好，我对贵司的【{job}】很感兴趣，希望进一步了解岗位要求和工作内容，期待与您沟通，谢谢！</textarea>
   <button id="fill">填充当前职位消息</button>
   <script src="resume-parser.js"></script>
+  <script src="api-client.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
