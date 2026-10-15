@@ -2,9 +2,9 @@
 <html lang="zh-CN">
 <head><meta charset="utf-8"><title>Boss 直聘应聘助手</title><style>body{font:14px Arial;max-width:420px;margin:0 auto;padding:12px;box-sizing:border-box}.window-header{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:white;z-index:1;border-bottom:1px solid #ddd;gap:10px}.window-header h3{margin:12px 0}button{margin:4px 0;padding:7px 10px}textarea,input{width:100%;box-sizing:border-box}textarea{height:90px}input{padding:7px;margin:3px 0 7px}#list{max-height:160px;overflow:auto}.job{padding:6px;border-bottom:1px solid #ddd;cursor:pointer}.muted{color:#777;font-size:12px}.row{display:flex;gap:6px}fieldset{border:1px solid #ddd;border-radius:6px;padding:10px}fieldset label{display:block;margin:5px 0}input[type=radio]{width:auto;margin:0 6px 0 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}</style></head>
 <body>
-  <header class="window-header"><h3>Boss 直聘应聘助手</h3><button id="closeAssistant">关闭窗口</button></header>
-  <p class="muted">独立窗口：点击其他页面也会保持打开。使用顶部关闭按钮结束。</p>
-  <p id="extensionVersion" class="muted">界面版本 v0.7.3</p>
+  <header class="window-header"><h3>Boss 直聘应聘助手</h3><button id="closeAssistant">关闭浮窗</button></header>
+  <p class="muted">页面浮窗：点击旁边页面不会关闭，点击顶部“关闭浮窗”结束。</p>
+  <p id="extensionVersion" class="muted">界面版本 v0.7.4</p>
   <fieldset>
     <legend>个人资料来源</legend>
     <label><input id="modeResume" name="profileMode" type="radio" value="resume" checked> 上传简历自动覆盖</label>
@@ -70,7 +70,7 @@
     <p id="connectionStatus" class="muted" role="status" aria-live="polite"></p>
     <p class="muted">地址、模型和密钥保存在当前浏览器，密钥以密码框显示，可手动替换或清除。首次连接新域名时由浏览器请求授权。测试连接只发送测试文字；生成回复会把个人资料和问题发送给上面显示的服务商。</p>
   </section>
-  <p class="muted">先在浏览器选中要沟通的 BOSS 页面，再回到助手读取或填充。操作目标为最近选中的 BOSS 页面。</p>
+  <p class="muted">读取和填充均针对当前浮窗所在的 BOSS 页面。</p>
   <label for="hrQuestion">问题文本（读取后请核对发送方）</label>
   <textarea id="hrQuestion" placeholder="点击读取当前页面，或直接粘贴 HR 的问题"></textarea>
   <div class="row"><button id="readHr">读取当前页面</button><button id="generate">生成回复</button></div>

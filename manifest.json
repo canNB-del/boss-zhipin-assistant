@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Boss 直聘应聘助手",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "读取BOSS聊天中的HR问题，生成候选回复并填充输入框；发送由用户手动确认。",
   "permissions": [
     "storage",
@@ -22,9 +22,16 @@
         "https://www.zhipin.com/*"
       ],
       "js": [
+        "floating-panel.js",
         "content.js"
       ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html"],
+      "matches": ["https://www.zhipin.com/*"]
     }
   ],
   "optional_host_permissions": [

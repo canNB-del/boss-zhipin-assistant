@@ -45,7 +45,7 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
   nodes.template.value='通用模板';nodes.baseUrl.value='https://api.openai.com/v1';nodes.model.value='gpt-4o-mini';
   const state={allowed:true,requests:[],grants:[],next:null,permissionError:null,closed:false,failWrite:false,accessLevel:null,target:null,tabMessages:[],alerts:[]};
   const ctx=vm.createContext({URL,AbortController,setTimeout,clearTimeout,window:{close(){state.closed=true;}},document:{getElementById:id=>nodes[id],createElement:()=>({})},confirm:()=>true,alert:message=>state.alerts.push(message),
-   chrome:{runtime:{getManifest(){return {version:installedVersion};},async sendMessage(){return {tab:state.target};}},tabs:{async sendMessage(tabId,message){state.tabMessages.push({tabId,message});return message.type==='getLatestHrMessage'?{text:'Synthetic HR question'}:{ok:true};}},permissions:{async request(options){state.grants.push(options);if(state.permissionError)throw new Error(state.permissionError);return state.allowed;}},storage:{local:{async get(defaults,cb){const data={...defaults,...structuredClone(store)};if(cb)cb(data);return data;},async setAccessLevel(options){state.accessLevel=options.accessLevel;},async set(data){if(state.failWrite)throw Error('synthetic-secret storage failure');Object.assign(store,structuredClone(data));},async remove(keys){keys.forEach(key=>delete store[key]);}}}},
+   chrome:{runtime:{getManifest(){return {version:installedVersion};},async sendMessage(message){if(message.type==='closeAssistantPanel'){state.closed=true;return {ok:true};}return {tab:state.target};}},tabs:{async sendMessage(tabId,message){state.tabMessages.push({tabId,message});return message.type==='getLatestHrMessage'?{text:'Synthetic HR question'}:{ok:true};}},permissions:{async request(options){state.grants.push(options);if(state.permissionError)throw new Error(state.permissionError);return state.allowed;}},storage:{local:{async get(defaults,cb){const data={...defaults,...structuredClone(store)};if(cb)cb(data);return data;},async setAccessLevel(options){state.accessLevel=options.accessLevel;},async set(data){if(state.failWrite)throw Error('synthetic-secret storage failure');Object.assign(store,structuredClone(data));},async remove(keys){keys.forEach(key=>delete store[key]);}}}},
    fetch:async(url,options)=>{state.requests.push({url,options,body:options.body===undefined?undefined:JSON.parse(options.body)});if(state.next)return state.next(url,options);return {ok:true,status:200,json:async()=>({choices:[{message:{content:'测试回复'}}]})};}});
   vm.runInContext(source,ctx);vm.runInContext(fs.readFileSync(path.join(root,'popup.js'),'utf8'),ctx);
   return {nodes,state,store,ctx};
@@ -171,7 +171,7 @@ function test(name,fn){return Promise.resolve().then(fn).then(()=>{passed++;cons
   assert.equal(keys.store.aiCredential.key,'synthetic-secret');keys.state.failWrite=true;await keys.nodes.apiKey.oninput();
   assert(keys.nodes.connectionStatus.textContent.includes('保存失败'));assert(!keys.nodes.connectionStatus.textContent.includes('synthetic-secret'));
  });
- await test('independent assistant reads and fills the remembered BOSS tab, never its own window',async()=>{
+ await test('embedded assistant reads and fills its own BOSS tab',async()=>{
   const ui=boot({profileSchemaVersion:1});await ready();
   ui.state.target={id:77,url:'https://www.zhipin.com/web/chat/index',title:'Synthetic BOSS'};
   await ui.nodes.readHr.onclick();assert.equal(ui.nodes.hrQuestion.value,'Synthetic HR question');

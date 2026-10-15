@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const popupVersion='0.7.3';
+const popupVersion='0.7.4';
 const reloadAiHelp='请在 edge://extensions/ 或 chrome://extensions/ 找到 Boss 直聘应聘助手，点击“重新加载”，再重新打开插件。只刷新 BOSS 页面不会更新扩展权限；请勿卸载，以免丢失本机资料。';
 const getJobs = () => new Promise(resolve => chrome.storage.local.get({jobs:[], template:$('template').value}, x => resolve(x)));
 const saveJobs = jobs => chrome.storage.local.set({jobs});
@@ -331,7 +331,13 @@ $('baseUrl').oninput=()=>{
   $('connectionStatus').textContent='地址已更改，请确认该接口的密钥；已保存的密钥仅用于原接口。';
 };
 $('apiKey').oninput=keyChanged;$('clearKey').onclick=clearKey;
-$('closeAssistant').onclick=async()=>{try{await credentialWrites;}catch{/* Save failure is already displayed by keyChanged. */}finally{window.close();}};
+$('closeAssistant').onclick=async()=>{
+  try{await credentialWrites;}catch{/* Save failure is already displayed by keyChanged. */}
+  try{
+    const response=await chrome.runtime.sendMessage({type:'closeAssistantPanel'});
+    if(!response?.ok)throw new Error('未确认关闭成功，请重新加载插件并刷新 BOSS 页面。');
+  }catch(error){$('connectionStatus').textContent='关闭浮窗失败：'+error.message;}
+};
 $('model').oninput=()=>{if(modelIds.length)renderModelList();$('connectionStatus').textContent='';$('reply').value='';};
 $('readHr').onclick=readHr;$('generate').onclick=generate;$('fillReply').onclick=fillReply;
 $('saveProfile').onclick=saveProfile;$('clearLocal').onclick=clearLocal;
