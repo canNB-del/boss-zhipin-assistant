@@ -10,6 +10,7 @@ function resetResumePreview(){
   resumeRevision++;
   $('resumePreview').hidden=true;
   $('resumeFile').value='';$('resumeText').value='';
+  $('resumeUnclassified').value='';$('resumeUnclassifiedGroup').hidden=true;
   for(const id of resumeFields)$(id).value='';
 }
 async function importResume(event){
@@ -23,6 +24,8 @@ async function importResume(event){
     if(revision!==resumeRevision)return;
     profileFields.forEach((id,i)=>$(resumeFields[i]).value=result.profile[id]||'');
     $('resumeText').value=result.text;
+    $('resumeUnclassified').value=result.unclassified||'';
+    $('resumeUnclassifiedGroup').hidden=!result.unclassified;
     $('resumePreview').hidden=false;
     $('resumeStatus').textContent='解析完成，请核对后再覆盖。'+result.warnings.join(' ');
   }catch(error){
@@ -35,6 +38,10 @@ function setResumeBusy(busy){
 }
 async function applyResume(){
   if(resumeBusy || $('resumePreview').hidden)return;
+  if($('resumeUnclassified').value.trim()){
+    $('resumeStatus').textContent='还有待归类内容，请先移入对应字段或删除，再清空待归类框后保存。';
+    $('resumeUnclassified').focus();return;
+  }
   const next=Object.fromEntries(profileFields.map((id,i)=>[id,$(resumeFields[i]).value.trim()]));
   if(!Object.values(next).some(Boolean)){$('resumeStatus').textContent='预览为空，请补充内容或取消导入。';return;}
   const previous=readProfile();

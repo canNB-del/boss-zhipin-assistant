@@ -21,6 +21,11 @@
       <textarea id="resumeSkills"></textarea>
       <label for="resumePreferences">求职意向与可用时间</label>
       <textarea id="resumePreferences"></textarea>
+      <div id="resumeUnclassifiedGroup" hidden>
+        <label for="resumeUnclassified">待归类内容</label>
+        <p class="muted">请将有用内容移入上方对应字段，删除不需要的内容，再清空此框后覆盖保存。这里的文字不会自动填入经历。</p>
+        <textarea id="resumeUnclassified" aria-label="待归类内容"></textarea>
+      </div>
       <details><summary>核对提取的原文（不会保存）</summary><textarea id="resumeText" readonly aria-label="简历提取原文"></textarea></details>
       <button id="applyResume">确认覆盖并保存个人资料</button>
       <button id="cancelResume">取消导入</button>
