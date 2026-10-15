@@ -1,55 +1,43 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><title>Boss 直聘应聘助手</title><style>body{font:14px Arial;width:380px;padding:12px}button{margin:4px 0;padding:7px 10px}textarea,input{width:100%;box-sizing:border-box}textarea{height:90px}input{padding:7px;margin:3px 0 7px}#list{max-height:160px;overflow:auto}.job{padding:6px;border-bottom:1px solid #ddd;cursor:pointer}.muted{color:#777;font-size:12px}.row{display:flex;gap:6px}</style></head>
+<head><meta charset="utf-8"><title>Boss 直聘应聘助手</title><style>body{font:14px Arial;width:380px;padding:12px}button{margin:4px 0;padding:7px 10px}textarea,input{width:100%;box-sizing:border-box}textarea{height:90px}input{padding:7px;margin:3px 0 7px}#list{max-height:160px;overflow:auto}.job{padding:6px;border-bottom:1px solid #ddd;cursor:pointer}.muted{color:#777;font-size:12px}.row{display:flex;gap:6px}fieldset{border:1px solid #ddd;border-radius:6px;padding:10px}fieldset label{display:block;margin:5px 0}input[type=radio]{width:auto;margin:0 6px 0 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}</style></head>
 <body>
   <h3>Boss 直聘应聘助手</h3>
-  <details open>
-    <summary>导入简历并覆盖个人资料</summary>
-    <p class="muted">支持 PDF、DOCX、TXT、MD，最大 10 MB；仅在本机解析，不会上传原文件。扫描件和旧版 DOC 请先转为可复制文字的格式。</p>
-    <label for="resumeFile">选择简历文件</label>
+  <fieldset>
+    <legend>个人资料来源</legend>
+    <label><input id="modeResume" name="profileMode" type="radio" value="resume" checked> 上传简历自动覆盖</label>
+    <label><input id="modeManual" name="profileMode" type="radio" value="manual"> 手动填写</label>
+  </fieldset>
+  <section id="resumePanel">
+    <p class="muted">选择简历后自动解析、覆盖并保存个人资料，无需手动填写或再次确认。支持 PDF、DOCX、TXT、MD，最大 10 MB。仅在本机解析；扫描件请先转成可复制文字的格式。</p>
+    <label for="resumeFile">上传简历并自动覆盖</label>
     <input id="resumeFile" type="file" accept=".pdf,.docx,.txt,.md">
     <p id="resumeStatus" class="muted" role="status" aria-live="polite"></p>
-    <div id="resumePreview" hidden>
-      <p class="muted">请核对并编辑下方结果；确认覆盖时，未识别或留空的字段也会清空原资料。不会改变你的 BOSS 在线简历或发送简历附件。</p>
-      <label for="resumeName">称呼</label>
-      <input id="resumeName" maxlength="80" autocomplete="off">
-      <label for="resumeEducation">教育背景</label>
-      <textarea id="resumeEducation"></textarea>
-      <label for="resumeExperience">工作或项目经历</label>
-      <textarea id="resumeExperience"></textarea>
-      <label for="resumeSkills">技能与优势</label>
-      <textarea id="resumeSkills"></textarea>
-      <label for="resumePreferences">求职意向与可用时间</label>
-      <textarea id="resumePreferences"></textarea>
-      <div id="resumeUnclassifiedGroup" hidden>
-        <label for="resumeUnclassified">待归类内容</label>
-        <p class="muted">请将有用内容移入上方对应字段，删除不需要的内容，再清空此框后覆盖保存。这里的文字不会自动填入经历。</p>
-        <textarea id="resumeUnclassified" aria-label="待归类内容"></textarea>
-      </div>
-      <details><summary>核对提取的原文（不会保存）</summary><textarea id="resumeText" readonly aria-label="简历提取原文"></textarea></details>
-      <button id="applyResume">确认覆盖并保存个人资料</button>
-      <button id="cancelResume">取消导入</button>
-    </div>
-    <button id="undoResume" hidden>撤销上次简历覆盖</button>
-  </details>
-  <hr>
-  <details open>
-    <summary>个人资料（自行填写，姓名可留空）</summary>
-    <p class="muted">所有资料默认空白。点击保存后仅保存在当前浏览器；点击生成回复时，填写的资料和当前问题会发送给 OpenAI。</p>
+    <details id="resumeResult" hidden>
+      <summary>查看当前资料（可选）</summary>
+      <pre id="resumeSummary"></pre>
+    </details>
+  </section>
+  <section id="manualPanel" hidden>
+    <p class="muted">按需填写后保存。不确定的内容可以留空。</p>
     <label for="profileName">称呼（选填）</label>
     <input id="profileName" autocomplete="off" maxlength="80" placeholder="可以不填真实姓名">
     <label for="profileEducation">教育背景</label>
-    <textarea id="profileEducation" placeholder="自行填写学历、专业、毕业时间等"></textarea>
+    <textarea id="profileEducation" placeholder="学历、专业、毕业时间等"></textarea>
     <label for="profileExperience">工作或项目经历</label>
-    <textarea id="profileExperience" placeholder="填写真实经历、个人职责和成果"></textarea>
+    <textarea id="profileExperience" placeholder="真实经历、个人职责和成果"></textarea>
     <label for="profileSkills">技能与优势</label>
-    <textarea id="profileSkills" placeholder="填写熟悉的技能及熟练程度"></textarea>
+    <textarea id="profileSkills" placeholder="熟悉的技能及熟练程度"></textarea>
     <label for="profilePreferences">求职意向与可用时间</label>
-    <textarea id="profilePreferences" placeholder="目标岗位、城市、到岗时间、薪资预期等；未确定的内容可留空"></textarea>
-    <button id="saveProfile">保存个人资料到本机</button>
-    <button id="clearLocal">清除本机求职数据</button>
-    <p id="profileStatus" class="muted" role="status"></p>
-  </details>
+    <textarea id="profilePreferences" placeholder="目标岗位、城市、到岗时间、薪资预期等"></textarea>
+    <label for="profileSupplement">补充信息（选填）</label>
+    <textarea id="profileSupplement" placeholder="其他需要用于回复 HR 的简历信息"></textarea>
+    <button id="saveProfile">保存手动填写的资料</button>
+  </section>
+  <button id="undoResume" hidden>撤销上次简历覆盖</button>
+  <button id="clearLocal">清除本机求职数据</button>
+  <p id="profileStatus" class="muted" role="status" aria-live="polite"></p>
+  <p class="muted">资料仅保存在当前浏览器。生成回复时，会将当前资料和问题发送给 OpenAI。导入不会修改 BOSS 在线简历或发送附件。</p>
   <hr>
   <input id="file" type="file" accept=".csv,.json"><br>
   <button id="addCurrent">加入当前职位</button>
